@@ -16,7 +16,6 @@ from django.db.models.base import ModelBase, subclass_exception
 from django.db.models.deletion import DO_NOTHING
 from django.db.models.fields import Field
 from django.db.models.fields.related import add_lazy_relation
-from django.db.models.loading import get_model
 from django.dispatch.dispatcher import receiver
 from django.utils.six import itervalues, string_types, with_metaclass
 from django.utils.six.moves import copyreg
@@ -25,8 +24,8 @@ from . import get_tenant_model
 from .management import create_tenant_schema, drop_tenant_schema
 from .managers import (AbstractTenantManager, TenantManager,
     TenantModelManagerDescriptor)
-from .utils import (clear_opts_related_cache, disconnect_signals, model_name,
-    receivers_for_model, remove_from_app_cache)
+from .utils import (clear_opts_related_cache, disconnect_signals, get_model,
+    model_name, receivers_for_model, remove_from_apps_registry)
 
 
 class TenantModels(object):
@@ -263,7 +262,7 @@ class TenantModelBase(ModelBase):
                         through._meta.auto_created):
                         # Replace the automatically created intermediary model
                         # by a TenantModelBase instance.
-                        remove_from_app_cache(through)
+                        remove_from_apps_registry(through)
                         # Make sure to clear the referenced model cache if
                         # we have contributed to it already.
                         if not isinstance(to, string_types):
@@ -302,7 +301,7 @@ class TenantModelBase(ModelBase):
             if (related_name is not None and
                 not (field.rel.is_hidden() or '%(class)s' in related_name)):
                     del cls.references[model]
-                    remove_from_app_cache(model, quiet=True)
+                    remove_from_apps_registry(model, quiet=True)
                     raise ImproperlyConfigured(
                         "Since `%s.%s` is originating from an instance "
                         "of `TenantModelBase` and not pointing to one "
@@ -322,7 +321,7 @@ class TenantModelBase(ModelBase):
             add_lazy_relation(model, field, through, cls.validate_through)
         elif not isinstance(through, cls):
             del cls.references[model]
-            remove_from_app_cache(model, quiet=True)
+            remove_from_apps_registry(model, quiet=True)
             raise ImproperlyConfigured(
                 "Since `%s.%s` is originating from an instance of "
                 "`TenantModelBase` its `through` option must also be pointing "
@@ -481,10 +480,7 @@ class TenantModelBase(ModelBase):
         name = reference.object_name_for_tenant(tenant)
 
         # Return the already cached model instead of creating a new one.
-        model = get_model(
-            opts.app_label, name.lower(),
-            only_installed=False
-        )
+        model = get_model(opts.app_label, name.lower())
         if model:
             return model
 
@@ -494,6 +490,8 @@ class TenantModelBase(ModelBase):
                 reference.Meta,
                 # TODO: Use `db_schema` once django #6148 is fixed.
                 db_table=db_schema_table(tenant, self._meta.db_table),
+                verbose_name=opts.verbose_name,
+                verbose_name_plural=opts.verbose_name_plural
             )
         }
 
@@ -532,7 +530,7 @@ class TenantModelBase(ModelBase):
         """
         if not issubclass(self, TenantSpecificModel):
             raise ValueError('Can only be called on tenant specific model.')
-        remove_from_app_cache(self)
+        remove_from_apps_registry(self)
         if not self._meta.proxy:
             # Some fields (GenericForeignKey, ImageField) attach (pre|post)_init
             # signals to their associated model even if they are abstract.
@@ -602,7 +600,7 @@ def validate_not_to_tenant_model(field, to, model):
     if isinstance(to, string_types):
         add_lazy_relation(model, field, to, validate_not_to_tenant_model)
     elif isinstance(to, TenantModelBase):
-        remove_from_app_cache(model, quiet=True)
+        remove_from_apps_registry(model, quiet=True)
         raise ImproperlyConfigured(
             "`%s.%s`'s `to` option` can't point to an instance of "
             "`TenantModelBase` since it's not one itself." % (

@@ -1,18 +1,16 @@
 from __future__ import unicode_literals
 
 from django.core.signals import Signal
-from django.db.models.loading import get_model
 from django.db.models.signals import class_prepared
+
+from .utils import get_model
 
 
 def lazy_class_prepared(app_label, object_name, callback):
     """
     Lazily execute a callback upon model class preparation.
     """
-    model = get_model(
-        app_label, object_name.lower(),
-        seed_cache=False, only_installed=False
-    )
+    model = get_model(app_label, object_name.lower())
     if model:
         callback(model)
     else:

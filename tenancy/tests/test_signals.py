@@ -5,7 +5,7 @@ from django.test import SimpleTestCase
 
 from .. import get_tenant_model
 from ..signals import lazy_class_prepared
-from ..utils import remove_from_app_cache
+from ..utils import remove_from_apps_registry
 
 
 def prepare_model():
@@ -13,7 +13,7 @@ def prepare_model():
         class Meta:
             app_label = 'tenancy'
             managed = True
-    remove_from_app_cache(NotPreparedYet)
+    remove_from_apps_registry(NotPreparedYet)
     return NotPreparedYet
 
 

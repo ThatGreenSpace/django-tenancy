@@ -1,13 +1,11 @@
 from __future__ import unicode_literals
 
-import imp
 from contextlib import contextmanager
 from itertools import chain
 
 import django
 from django.db import connections, models, router
 from django.db.models.base import ModelBase
-from django.db.models.loading import cache as app_cache
 from django.dispatch.dispatcher import _make_id
 
 
@@ -24,57 +22,115 @@ else:
                 yield db
 
 
-@contextmanager
-def app_cache_lock():
-    try:
-        imp.acquire_lock()
-        yield
-    finally:
-        imp.release_lock()
+def _unrefer_model(model):
+    disconnect_signals(model)
+    opts = model._meta
+    fields_with_model = chain(
+        opts.get_fields_with_model(),
+        opts.get_m2m_with_model()
+    )
+    for field, field_model in fields_with_model:
+        rel = field.rel
+        if field_model is None and rel:
+            to = rel.to
+            if isinstance(to, ModelBase):
+                clear_opts_related_cache(to)
+                rel_is_hidden = rel.is_hidden()
+                # An accessor is added to related classes if they are not
+                # hidden. However o2o fields *always* add an accessor
+                # even if the relationship is hidden.
+                o2o = isinstance(field, models.OneToOneField)
+                if not rel_is_hidden or o2o:
+                    try:
+                        delattr(to, field.related.get_accessor_name())
+                    except AttributeError:
+                        # Hidden related names are not respected for o2o
+                        # thus a tenant models with a o2o pointing to
+                        # a non-tenant one would have a class for multiple
+                        # tenant thus the attribute might be attempted
+                        # to be deleted multiple times.
+                        if not (o2o and rel_is_hidden):
+                            raise
 
 
-def remove_from_app_cache(model_class, quiet=False):
+if django.VERSION >= (1, 7):
+    from django.apps.registry import apps
+
+    def get_model(app_label, model_name, seed_cache=False):
+        try:
+            return apps.get_app_config(app_label).get_model(model_name)
+        except LookupError:
+            pass
+
+    @contextmanager
+    def app_registry_lock():
+        with apps._lock:
+            yield
+
+    def _get_app_models(app_label):
+        return apps.get_app(app_label).models
+
+    def _pop_from_apps_registry(app_label, model_name, quiet):
+        try:
+            app_config = apps.get_app_config(app_label)
+        except LookupError:
+            if quiet:
+                return
+            raise ValueError(
+                "Unregistered app %s" % app_label
+            )
+        try:
+            return app_config.models.pop(model_name)
+        except KeyError:
+            if quiet:
+                return
+            raise ValueError(
+                "%s.%s is not registered" % (app_label, model_name)
+            )
+
+else:
+    import imp
+    from django.db.models.loading import cache
+
+    def get_model(app_label, model_name, seed_cache=False):
+        return cache.get_model(
+            app_label, model_name, seed_cache=seed_cache, only_installed=False
+        )
+
+    @contextmanager
+    def app_registry_lock():
+        try:
+            imp.acquire_lock()
+            yield
+        finally:
+            imp.release_lock()
+
+    def _pop_from_apps_registry(app_label, model_name, quiet):
+        try:
+            app_models = cache.app_models[app_label]
+        except LookupError:
+            if quiet:
+                return
+            raise ValueError(
+                "Unregistered app %s" % app_label
+            )
+        try:
+            model = app_models.pop(model_name)
+        except KeyError:
+            if quiet:
+                return
+            raise ValueError(
+                "%s.%s is not registered" % (app_label, model_name)
+            )
+        cache._get_models_cache.clear()
+        return model
+
+def remove_from_apps_registry(model_class, quiet=False):
     opts = model_class._meta
-    with app_cache_lock():
-        app_models = app_cache.app_models.get(opts.app_label, None)
-        if app_models is None:
-            if quiet:
-                return
-            else:
-                raise ValueError(
-                    "No cached models for app %s" % opts.app_label
-                )
-        model = app_models.pop(model_name(opts), None)
-        if model is None:
-            if quiet:
-                return
-            else:
-                raise ValueError("%r is not cached" % model_class)
-        app_cache._get_models_cache.clear()
-        disconnect_signals(model)
-        for field, field_model in chain(opts.get_fields_with_model(),
-                                        opts.get_m2m_with_model()):
-            rel = field.rel
-            if field_model is None and rel:
-                to = rel.to
-                if isinstance(to, ModelBase):
-                    clear_opts_related_cache(to)
-                    rel_is_hidden = rel.is_hidden()
-                    # An accessor is added to related classes if they are not
-                    # hidden. However o2o fields *always* add an accessor
-                    # even if the relationship is hidden.
-                    o2o = isinstance(field, models.OneToOneField)
-                    if not rel_is_hidden or o2o:
-                        try:
-                            delattr(to, field.related.get_accessor_name())
-                        except AttributeError:
-                            # Hidden related names are not respected for o2o
-                            # thus a tenant models with a o2o pointing to
-                            # a non-tenant one would have a class for multiple
-                            # tenant thus the attribute might be attempted
-                            # to be deleted multiple times.
-                            if not (o2o and rel_is_hidden):
-                                raise
+    with app_registry_lock():
+        model = _pop_from_apps_registry(opts.app_label, model_name(opts), quiet)
+        if model:
+            _unrefer_model(model)
 
 
 model_sender_signals = (

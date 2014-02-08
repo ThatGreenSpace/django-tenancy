@@ -75,9 +75,9 @@ class PostInitFieldsModel(TenantModel):
     content_object = GenericForeignKey('content_type', 'object_id')
     try:
         if django.VERSION >= (1, 6):
-            from django.utils.image import Image as _
+            from django.utils.image import Image
         else:
-            from PIL import Image as _
+            from PIL import Image
     except (ImportError, ImproperlyConfigured):
         pass
     else:

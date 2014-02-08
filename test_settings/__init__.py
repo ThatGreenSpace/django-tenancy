@@ -13,4 +13,5 @@ try:
 except ImportError:
     pass
 else:
-    INSTALLED_APPS.append('mutant')
+    pass
+    #INSTALLED_APPS.append('mutant')

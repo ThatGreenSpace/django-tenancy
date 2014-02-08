@@ -15,8 +15,7 @@ from django.db import connections, models, router, transaction
 from django.dispatch.dispatcher import receiver
 
 from .. import signals
-from ..utils import (allow_migrate, disconnect_signals, receivers_for_model,
-    remove_from_app_cache)
+from ..utils import allow_migrate
 
 
 def create_tenant_schema(tenant, using=None):

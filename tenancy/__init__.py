@@ -6,15 +6,13 @@ __version__ = (0, 1, 2)
 
 def get_tenant_model(seed_cache=True):
     from django.core.exceptions import ImproperlyConfigured
-    from django.db.models import get_model
     from .models import AbstractTenant
     from .settings import TENANT_MODEL
+    from .utils import get_model
 
     app_label, object_name = TENANT_MODEL.split('.')
     model_name = object_name.lower()
-    tenant_model = get_model(
-        app_label, model_name, seed_cache=seed_cache, only_installed=False
-    )
+    tenant_model = get_model(app_label, model_name, seed_cache=seed_cache)
     if tenant_model is None:
         raise ImproperlyConfigured(
             "TENANCY_TENANT_MODEL refers to model '%s.%s' that has not "
