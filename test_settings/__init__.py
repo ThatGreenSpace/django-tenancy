@@ -15,3 +15,5 @@ except ImportError:
 else:
     pass
     #INSTALLED_APPS.append('mutant')
+
+SILENCED_SYSTEM_CHECKS = ['1_7.W001']
