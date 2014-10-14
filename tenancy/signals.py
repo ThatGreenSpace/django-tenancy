@@ -32,3 +32,6 @@ post_models_creation = Signal(providing_args=['tenant', 'using'])
 
 pre_schema_deletion = Signal(providing_args=['tenant', 'using'])
 post_schema_deletion = Signal(providing_args=['tenant', 'using'])
+
+post_schema_loaded = Signal(providing_args=['tenant', 'using'])
+pre_schema_unloaded = Signal(providing_args=['tenant', 'using'])
