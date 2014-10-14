@@ -2,10 +2,10 @@ from __future__ import unicode_literals
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db import connections, DEFAULT_DB_ALIAS
+from django.db import connections, router, DEFAULT_DB_ALIAS
 from django.http import Http404
 
-from . import get_tenant_model
+from . import get_tenant_model, signals
 from .settings import HOST_NAME
 
 
@@ -60,10 +60,16 @@ class GlobalTenantMiddleware(object):
 
     def pollute_global_state(self, tenant):
         setattr(self.get_global_state(), self.attr_name, tenant)
-
+        signals.post_schema_loaded.send(
+            sender=tenant.__class__, tenant=tenant, using=router.db_for_write(tenant.__class__, instance=tenant)
+        )
     def clean_global_state(self):
         global_state = self.get_global_state()
         if hasattr(global_state, self.attr_name):
+            tenant = getattr(global_state, self.attr_name)
+            signals.pre_schema_unloaded.send(
+                sender=tenant.__class__, tenant=tenant, using=router.db_for_write(tenant.__class__, instance=tenant)
+            )
             delattr(global_state, self.attr_name)
 
     def process_request(self, request):
