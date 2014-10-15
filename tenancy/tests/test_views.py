@@ -21,6 +21,8 @@ from .views import (InvalidModelMixin, MissingFieldsModelFormMixin,
     SpecificModelFormSetMixin, SpecificModelMixin, TenantMixinView,
     TenantWizardView, UnspecifiedFormClass)
 from .utils import TenancyTestCase
+from ..signals import post_schema_loaded, pre_schema_unloaded
+from ..middleware import GlobalTenantMiddleware
 
 
 class TenantMixinTest(TenancyTestCase):
@@ -215,3 +217,39 @@ class TenantWizardMixinTest(TenancyTestCase):
         self.assertEqual(formset.model, model)
         self.assertEqual(formset.fk, model._meta.get_field('fk'))
         self.assertTrue(issubclass(formset.form, RelatedTenantModelForm))
+
+
+class SchemaSignalsTest(TenancyTestCase):
+    client_class = RequestFactory
+
+    def test_schema_signals(self):
+        data = []
+
+        def post_schema_loaded_handler(sender, tenant, using, **kwargs):
+            self.assertEqual(tenant, self.tenant)
+            self.assertEqual(tenant.name, self.tenant.name)
+            data.append(tenant.name)
+
+        def pre_schema_unloaded_handler(sender, tenant, using, **kwargs):
+            self.assertEqual(data, [tenant.name])
+            data.pop()
+
+        post_schema_loaded.connect(post_schema_loaded_handler, weak=False)
+        pre_schema_unloaded.connect(pre_schema_unloaded_handler, weak=False)
+
+        try:
+            self.assertEqual(data, [])
+            global_tenant_middleware = GlobalTenantMiddleware()
+            view = TenantMixinView()
+            request = self.client.request()
+            view.request = request
+            setattr(request, view.tenant_attr_name, self.tenant)
+            global_tenant_middleware.process_request(request)
+            self.assertEqual(data, [self.tenant.name])
+            resp =  view.dispatch(request)
+            global_tenant_middleware.process_response(request, resp)
+            self.assertEqual(data, [])
+
+        finally:
+            post_schema_loaded.disconnect(post_schema_loaded_handler)
+            pre_schema_unloaded.disconnect(pre_schema_unloaded_handler)
