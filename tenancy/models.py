@@ -241,7 +241,7 @@ class TenantModelBase(ModelBase):
             if getattr(Meta, 'proxy', False):
                 model = super_new(
                     cls, name, bases,
-                    dict(attrs, meta=meta(Meta, managed=False))
+                    dict(attrs, meta=meta(Meta, managed=True))
                 )
                 cls.references[model] = cls.reference(model, Meta)
             else:
@@ -261,7 +261,7 @@ class TenantModelBase(ModelBase):
                             related_names[m2m.name] = m2m.rel.related_name
                 model = super_new(
                     cls, name, bases,
-                    dict(attrs, Meta=meta(Meta, managed=False))
+                    dict(attrs, Meta=meta(Meta, managed=True))
                 )
                 cls.references[model] = cls.reference(model, Meta, related_names)
                 opts = model._meta
