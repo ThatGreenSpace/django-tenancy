@@ -132,6 +132,14 @@ def remove_from_apps_registry(model_class, quiet=False):
         if model:
             _unrefer_model(model)
 
+def remove_virtual_fields(model):
+    for field in model._meta.virtual_fields:
+        from .models import TenantModelBase
+        from django.contrib.contenttypes.generic import GenericRelation
+        if (isinstance(field, GenericRelation) and isinstance(field.rel.to, TenantModelBase)
+            and field.rel.to == field.rel.to._for_tenant_model):
+            model._meta.virtual_fields.remove(field)
+
 
 model_sender_signals = (
     models.signals.pre_init,

@@ -25,7 +25,7 @@ from .management import create_tenant_schema, drop_tenant_schema
 from .managers import (AbstractTenantManager, TenantManager,
     TenantModelManagerDescriptor)
 from .utils import (clear_opts_related_cache, disconnect_signals, get_model,
-    model_name, receivers_for_model, remove_from_apps_registry)
+    model_name, receivers_for_model, remove_from_apps_registry, remove_virtual_fields)
 
 
 class TenantModels(object):
@@ -443,6 +443,8 @@ class TenantModelBase(ModelBase):
                 if on_delete:
                     rel.on_delete = on_delete
             field.contribute_to_class(model, field.name)
+
+        remove_virtual_fields(model)
 
         return model
 
