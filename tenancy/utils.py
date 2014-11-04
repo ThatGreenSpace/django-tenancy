@@ -64,8 +64,11 @@ if django.VERSION >= (1, 7):
 
     @contextmanager
     def app_registry_lock():
-        with apps._lock:
-            yield
+        # yield
+        if not apps.apps_ready:
+            with apps._lock:
+                yield
+        yield
 
     def _get_app_models(app_label):
         return apps.get_app(app_label).models
