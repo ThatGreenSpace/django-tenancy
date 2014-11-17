@@ -524,6 +524,8 @@ class TenantModelBase(ModelBase):
             TenantModelBase, str(name), bases, attrs
         )
 
+        remove_virtual_fields(model)
+
         return model
 
     def destroy(self):
