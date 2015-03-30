@@ -12,10 +12,13 @@ class TenantMigration(Migration):
     def post_tenant_step_sql(self, tenant, default_schema_name):
         return ["SET search_path TO %s" % default_schema_name]
 
+    def get_queryset(self):
+        return get_tenant_model()._default_manager.all()
+
     def tenant_step(self, operation, project_state, schema_editor, collect_sql):
         default_schema_name = 'public'
         deferred_sql = schema_editor.deferred_sql
-        for tenant in get_tenant_model()._default_manager.all():
+        for tenant in self.get_queryset():
             pre_sql = self.pre_tenant_step_sql(tenant, default_schema_name)
             for statement in pre_sql:
                 schema_editor.execute(statement)
