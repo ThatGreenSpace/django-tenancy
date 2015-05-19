@@ -286,7 +286,7 @@ class TenantModelBase(ModelBase):
                             through._meta.auto_created):
                         # Replace the automatically created intermediary model
                         # by a TenantModelBase instance.
-                        remove_from_app_cache(through)
+                        remove_from_app_cache(through, quiet=True)
                         # Make sure to clear the referenced model cache if
                         # we have contributed to it already.
                         if not isinstance(to, string_types):
